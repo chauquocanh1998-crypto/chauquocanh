@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Kiểm Kê Nội Bộ</title>
+    <!-- Thư viện SheetJS để xuất file Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            max-width: 600px; 
+            margin: auto; 
+            background-color: #f9f9f9;
+        }
+        .container {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        input, button { 
+            padding: 10px; 
+            margin: 5px 0; 
+            width: 100%; 
+            box-sizing: border-box; 
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            cursor: pointer;
+            font-weight: bold;
+        }
+        #addBtn { 
+            background-color: #007bff; 
+            color: white; 
+            border: none; 
+        }
+        #exportBtn { 
+            background-color: #217346; 
+            color: white; 
+            border: none; 
+            margin-top: 10px; 
+        }
+        ul { 
+            list-style-type: none; 
+            padding: 0; 
+        }
+        li { 
+            background: #f4f4f4; 
+            margin: 5px 0; 
+            padding: 10px; 
+            display: flex; 
+            justify-content: space-between; 
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Kiểm Kê Nội Bộ</h2>
+        
+        <!-- Form nhập dữ liệu -->
+        <input type="text" id="itemName" placeholder="Tên vật tư (VD: Vải cuộn, Linh kiện A)">
+        <input type="number" id="itemQty" placeholder="Số lượng">
+        <input type="text" id="itemLocation" placeholder="Vị trí (VD: Kho Xưởng 1, Kho A)">
+        
+        <button id="addBtn">Thêm vào kho</button>
+        <button id="exportBtn">Xuất danh mục ra Excel (.xlsx)</button>
+
+        <h3>Danh sách vật tư hiện tại</h3>
+        <ul id="inventoryList"></ul>
+    </div>
+
+    <!-- Kết nối file logic JavaScript -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

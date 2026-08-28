@@ -1,309 +1,381 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Kiểm Kê Nội Bộ</title>
-    <!-- Thư viện Quét mã QR và Xuất Excel -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 15px; max-width: 650px; margin: auto; background: #f4f6f9; }
-        .card { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
-        input, select, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-        button { font-weight: bold; cursor: pointer; background: #007bff; color: white; border: none; }
-        .btn-success { background: #28a745; }
-        .btn-warning { background: #ffc107; color: #000; }
-        .btn-danger { background: #dc3545; }
-        .hidden { display: none; }
-        #reader { width: 100%; margin-top: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f2f2f2; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Kiểm Kê - Multi-site</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <style>
+     .hidden-view { display: none !important; }
+     #reader { width: 100%; border-radius: 0.5rem; overflow: hidden; display: none; margin-bottom: 1rem;}
+     #reader video { width: 100%; height: auto; object-fit: cover;}
+     .table-container { overflow-x: auto; max-height: 400px; }
+     thead th { position: sticky; top: 0; z-index: 10; }
+  </style>
 </head>
-<body>
+<body class="bg-gray-100 min-h-screen text-gray-800 flex flex-col">
+   
+   <nav class="bg-blue-700 text-white p-4 flex justify-between items-center shadow-md">
+       <div class="font-bold text-xl flex items-center gap-2">
+           <i class="fas fa-boxes"></i> KKK System
+       </div>
+       <div id="nav-actions" class="hidden-view flex items-center gap-4">
+            <span id="user-display" class="font-semibold text-sm bg-blue-800 px-3 py-1 rounded-full border border-blue-600"></span>
+            <button onclick="logout()" class="bg-red-500 text-sm px-3 py-1.5 rounded-lg hover:bg-red-600 transition shadow flex items-center gap-2">
+                <i class="fas fa-sign-out-alt"></i> Đăng xuất
+            </button>
+       </div>
+   </nav>
 
-    <!-- MÀN HÌNH ĐĂNG NHẬP -->
-    <div id="loginSection" class="card">
-        <h2>Đăng Nhập Hệ Thống</h2>
-        <select id="loginRole" onchange="toggleLoginInputs()">
-            <option value="guest">Khách (Nhân viên kiểm kê)</option>
-            <option value="admin">Quản trị viên (Admin)</option>
-        </select>
+   <main class="container mx-auto p-4 max-w-6xl mt-6 flex-grow">
+       <div id="login-view" class="bg-white p-8 rounded-xl shadow-xl max-w-md mx-auto transform transition">
+           <div class="text-center mb-6">
+                <i class="fas fa-warehouse text-4xl text-blue-600 mb-3"></i>
+                <h2 class="text-2xl font-bold text-gray-800">Cổng Kiểm Kê</h2>
+           </div>
+           
+           <div class="mb-4">
+               <label class="block mb-2 font-semibold text-gray-700">Vai trò</label>
+               <select id="login-role" class="w-full border-2 border-gray-200 p-3 rounded-lg outline-none" onchange="togglePassword()">
+                   <option value="employee">Nhân viên kiểm kê</option>
+                   <option value="admin">Quản trị viên (Admin)</option>
+               </select>
+           </div>
+           <div class="mb-6 hidden-view" id="admin-pass-group">
+               <label class="block mb-2 font-semibold text-gray-700">Mật khẩu <span class="text-xs font-normal text-red-500">(Mặc định: admin)</span></label>
+               <input type="password" id="admin-pass" class="w-full border-2 border-gray-200 p-3 rounded-lg outline-none" placeholder="Nhập mật khẩu...">
+           </div>
+           <button onclick="login()" class="w-full bg-blue-600 text-white p-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-md">
+               <i class="fas fa-sign-in-alt"></i> Vào Hệ Thống
+           </button>
+       </div>
 
-        <div id="guestInputs">
-            <input type="text" id="guestName" placeholder="Nhập tên người kiểm kê...">
-        </div>
+       <div id="employee-view" class="hidden-view">
+           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+               <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-blue-500">
+                   <h3 class="text-xl font-bold mb-4 text-gray-800"><i class="fas fa-clipboard-check text-blue-500"></i> Phiếu Kiểm Đếm</h3>
+                   <div class="space-y-4">
+                       <div>
+                           <label class="block mb-1 font-semibold text-sm">Người kiểm kê <span class="text-red-500">*</span></label>
+                           <input type="text" id="inspector-name" class="w-full border p-2.5 rounded-lg bg-gray-50 outline-none" placeholder="VD: Nguyễn Văn A">
+                       </div>
+                       <div>
+                           <label class="block mb-1 font-semibold text-sm">Công đoạn / Xưởng <span class="text-red-500">*</span></label>
+                           <select id="workshop-select" class="w-full border p-2.5 rounded-lg bg-gray-50 outline-none" onchange="checkMachineField()">
+                               <option value="">-- Chọn công đoạn --</option>
+                           </select>
+                       </div>
+                       <div class="hidden-view" id="machine-group">
+                           <label class="block mb-1 font-semibold text-sm">Số máy (Dành cho M10 - Cắt) <span class="text-red-500">*</span></label>
+                           <select id="machine-select" class="w-full border p-2.5 rounded-lg bg-blue-50 text-blue-900 border-blue-200 outline-none">
+                               <option value="">-- Chọn máy cắt --</option>
+                               <option value="Máy Cắt 01">Máy Cắt 01</option>
+                               <option value="Máy Cắt 02">Máy Cắt 02</option>
+                               <option value="Máy Cắt 03">Máy Cắt 03</option>
+                               <option value="Máy Cắt 04">Máy Cắt 04</option>
+                           </select>
+                       </div>
+                       <div class="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                           <label class="block mb-3 font-semibold text-gray-700">Quét hoặc Nhập mã</label>
+                           <div id="reader"></div>
+                           <div class="flex gap-2 mb-3">
+                               <button onclick="startScanner()" id="btn-scan" class="bg-gray-800 text-white p-2 rounded-lg w-1/3 flex items-center justify-center gap-2">
+                                   <i class="fas fa-camera"></i> Quét QR
+                               </button>
+                               <input type="text" id="material-code" class="w-2/3 border p-2.5 rounded-lg outline-none" placeholder="Nhập Material...">
+                           </div>
+                           <div id="material-info" class="text-sm font-medium min-h-[1.5rem]"></div>
+                       </div>
+                       <div>
+                           <label class="block mb-1 font-semibold text-sm">Số lượng <span class="text-red-500">*</span></label>
+                           <input type="number" step="any" id="material-qty" class="w-full border p-3 rounded-lg font-bold text-xl text-blue-700 outline-none text-center" placeholder="0">
+                       </div>
+                       <button onclick="saveInventory()" class="w-full bg-green-500 text-white p-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2">
+                           <i class="fas fa-save"></i> LƯU KẾT QUẢ
+                       </button>
+                   </div>
+               </div>
 
-        <div id="adminInputs" class="hidden">
-            <input type="text" id="adminUser" placeholder="Tên đăng nhập admin">
-            <input type="password" id="adminPass" placeholder="Mật khẩu">
-        </div>
+               <div class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-gray-400 flex flex-col">
+                   <h3 class="text-xl font-bold mb-4 text-gray-800"><i class="fas fa-history text-gray-500"></i> Dữ liệu vừa quét</h3>
+                   <div class="flex-grow table-container border rounded-lg">
+                       <table class="w-full text-sm text-left">
+                           <thead class="bg-gray-100 text-gray-600">
+                               <tr>
+                                   <th class="p-3 font-semibold border-b">Mã NVL</th>
+                                   <th class="p-3 font-semibold border-b">Số lượng</th>
+                                   <th class="p-3 font-semibold border-b">Vị trí</th>
+                               </tr>
+                           </thead>
+                           <tbody id="session-history-table" class="divide-y divide-gray-100"></tbody>
+                       </table>
+                   </div>
+               </div>
+           </div>
+       </div>
 
-        <button id="loginBtn">Vào Hệ Thống</button>
-    </div>
+       <div id="admin-view" class="hidden-view">
+           <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-xl shadow-sm px-4 pt-4 gap-2">
+               <button onclick="switchAdminTab('logs')" id="tab-logs" class="py-3 px-6 text-sm font-bold border-b-4 border-blue-600 text-blue-600 outline-none rounded-t-md">Lịch Sử Kiểm Kê</button>
+               <button onclick="switchAdminTab('materials')" id="tab-materials" class="py-3 px-6 text-sm font-bold border-b-4 border-transparent text-gray-500 outline-none rounded-t-md">Danh mục Vật Tư</button>
+           </div>
 
-    <!-- MÀN HÌNH CHÍNH (SAU KHỦNG ĐĂNG NHẬP) -->
-    <div id="mainSection" class="hidden">
-        <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
-            <div>Xin chào: <strong id="userInfo"></strong> (<span id="userRole"></span>)</div>
-            <button id="logoutBtn" style="width: auto; padding: 5px 10px;" class="btn-danger">Đăng xuất</button>
-        </div>
+           <div id="admin-logs-tab" class="bg-white p-6 rounded-b-xl rounded-tr-xl shadow-lg">
+               <div class="flex justify-between items-center mb-6">
+                   <h3 class="text-xl font-bold text-gray-800">Tổng hợp Dữ liệu</h3>
+                   <div class="flex gap-2">
+                       <button onclick="exportHistoryExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2">Xuất Excel</button>
+                       <button onclick="clearHistory()" class="bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-lg">Xóa lịch sử</button>
+                   </div>
+               </div>
+               <div class="table-container border rounded-lg">
+                   <table class="w-full text-sm text-left">
+                       <thead class="bg-gray-800 text-white sticky top-0">
+                           <tr>
+                               <th class="p-3">Thời gian</th><th class="p-3">Người KK</th><th class="p-3">Công đoạn</th>
+                               <th class="p-3">Mã NVL</th><th class="p-3">Tên NVL</th><th class="p-3">SL</th><th class="p-3">Xóa</th>
+                           </tr>
+                       </thead>
+                       <tbody id="admin-history-table" class="divide-y divide-gray-200"></tbody>
+                   </table>
+               </div>
+           </div>
 
-        <!-- PHẦN DÀNH CHO ADMIN: QUẢN LÝ DANH MỤC MÃ VẬT TƯ -->
-        <div id="adminPanel" class="card hidden">
-            <h3>Quản Lý Danh Mục Vật Tư (Admin)</h3>
-            <input type="text" id="matGroup" placeholder="Nhóm Material (VD: Vải, Linh kiện)">
-            <input type="text" id="matCode" placeholder="Mã vật tư (VD: VT-001)">
-            <input type="text" id="matName" placeholder="Tên vật tư">
-            <input type="text" id="matQR" placeholder="Mã QR / Code (Dùng để quét)">
-            <button id="addMaterialBtn" class="btn-warning">Thêm Vào Danh Mục</button>
-        </div>
+           <div id="admin-materials-tab" class="hidden-view bg-white p-6 rounded-b-xl rounded-tr-xl shadow-lg">
+               <div class="flex justify-between items-center mb-6">
+                   <div>
+                       <h3 class="text-xl font-bold text-gray-800">Quản lý Master Data</h3>
+                       <p class="text-sm text-gray-500 mt-1">Hỗ trợ upload file Excel (cần cột <b>Diễn giải, Material, MSP</b>).</p>
+                   </div>
+                   <div class="flex items-center gap-2 bg-gray-50 p-2 border rounded-lg">
+                       <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="text-sm">
+                       <button onclick="uploadExcel()" class="bg-blue-600 text-white px-4 py-2 rounded-lg">Nhập dữ liệu</button>
+                   </div>
+               </div>
+               <button onclick="clearMaterials()" class="bg-red-50 text-red-600 border px-3 py-1.5 rounded-lg mb-4 text-sm">Xóa danh mục</button>
+               <div class="table-container border rounded-lg h-[500px]">
+                   <table class="w-full text-sm text-left">
+                       <thead class="bg-gray-800 text-white sticky top-0">
+                           <tr><th class="p-3">Material (Mã)</th><th class="p-3 w-1/3">Diễn giải</th><th class="p-3 w-1/3">MSP</th><th class="p-3">Xóa</th></tr>
+                       </thead>
+                       <tbody id="materials-table" class="divide-y divide-gray-200"></tbody>
+                   </table>
+               </div>
+           </div>
+       </div>
+   </main>
 
-        <!-- PHẦN KIỂM KÊ (DÀNH CHO CẢ KHÁCH VÀ ADMIN) -->
-        <div class="card">
-            <h3>Thực Hiện Kiểm Kê</h3>
-            <input type="date" id="auditDate">
-            
-            <button id="startScannerBtn" class="btn-warning">Quét Mã QR qua Camera</button>
-            <div id="reader"></div>
+   <script>
+       const WORKSHOPS = [
+           { id: 'B09', name: 'BTP In Flexo' }, { id: 'B10', name: 'BTP Cắt' }, { id: 'B15', name: 'BTP Đóng gói' },
+           { id: 'G01', name: 'SP gia công' }, { id: 'K01', name: 'Tạo hạt' }, { id: 'K02', name: 'Bản in Flexo' },
+           { id: 'K03', name: 'Chỉ may' }, { id: 'K04', name: 'Chia nẹp kéo sợi' }, { id: 'K05', name: 'Nẹp lớn' },
+           { id: 'K06', name: 'Backflush' }, { id: 'K07', name: 'SPNB Tráng' }, { id: 'M01', name: 'Kéo sợi' },
+           { id: 'M02', name: 'Dệt' }, { id: 'M03', name: 'Ghép màng' }, { id: 'M04', name: 'Tráng' },
+           { id: 'M05', name: 'Thổi túi' }, { id: 'M06', name: 'Lộn bao' }, { id: 'M07', name: 'In màng' },
+           { id: 'M08', name: 'Chia màng' }, { id: 'M09', name: 'In Flexo' }, { id: 'M10', name: 'Cắt' },
+           { id: 'M11', name: 'Pinch' }, { id: 'M12', name: 'Hoàn tất – May' }, { id: 'M13', name: 'Hoàn tất – Lồng' },
+           { id: 'M14', name: 'Hoàn tất – Phụ trợ' }, { id: 'M15', name: 'Đóng gói' }, { id: 'P01', name: 'Spare-part' },
+           { id: 'R00', name: 'Nguyên vật liệu' }, { id: 'R01', name: 'Mực chung' }, { id: 'R02', name: 'Trục in/ bản in' },
+           { id: 'S06', name: 'Keo trộn' }
+       ];
 
-            <select id="selectMaterial">
-                <option value="">-- Chọn Material / Vật tư --</option>
-            </select>
-            
-            <input type="number" id="auditQty" placeholder="Nhập số lượng kiểm kê">
-            <button id="submitAuditBtn" class="btn-success">Lưu Kết Quả Kiểm Kê</button>
-        </div>
+       let sessionLogs = []; 
+       let html5QrcodeScanner = null;
 
-        <!-- LỊCH SỬ VÀ XUẤT EXCEL -->
-        <div class="card">
-            <h3>Lịch Sử Kiểm Kê Nội Bộ</h3>
-            <button id="exportExcelBtn" class="btn-success">Xuất File Kiểm Kê (.xlsx)</button>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Ngày</th>
-                        <th>Người KK</th>
-                        <th>Vật Tư</th>
-                        <th>SL</th>
-                    </tr>
-                </thead>
-                <tbody id="historyTable"></tbody>
-            </table>
-        </div>
-    </div>
+       window.onload = () => {
+           const wsSelect = document.getElementById('workshop-select');
+           WORKSHOPS.forEach(w => wsSelect.add(new Option(`${w.id} - ${w.name}`, w.id)));
+           if(!localStorage.getItem('inventory_materials')) localStorage.setItem('inventory_materials', JSON.stringify([]));
+           if(!localStorage.getItem('inventory_history')) localStorage.setItem('inventory_history', JSON.stringify([]));
+       };
 
-    <!-- SCRIPT CHUYỂN ĐỔI FORM ĐĂNG NHẬP -->
-    <script>
-        function toggleLoginInputs() {
-            const role = document.getElementById('loginRole').value;
-            if(role === 'admin') {
-                document.getElementById('guestInputs').classList.add('hidden');
-                document.getElementById('adminInputs').classList.remove('hidden');
-            } else {
-                document.getElementById('guestInputs').classList.remove('hidden');
-                document.getElementById('adminInputs').classList.add('hidden');
-            }
-        }
-    </script>
+       function togglePassword() {
+           document.getElementById('admin-pass-group').classList.toggle('hidden-view', document.getElementById('login-role').value !== 'admin');
+       }
 
-    <!-- LOGIC FIREBASE VÀ XỬ LÝ CHÍNH -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+       function login() {
+           const role = document.getElementById('login-role').value;
+           if(role === 'admin' && document.getElementById('admin-pass').value !== 'admin') return Swal.fire('Lỗi', 'Sai mật khẩu Admin!', 'error');
+           
+           document.getElementById('login-view').classList.add('hidden-view');
+           document.getElementById('nav-actions').classList.remove('hidden-view');
+           
+           if(role === 'employee') {
+               document.getElementById('employee-view').classList.remove('hidden-view');
+               document.getElementById('user-display').innerText = 'Nhân viên';
+               document.getElementById('inspector-name').value = localStorage.getItem('last_inspector') || '';
+           } else {
+               document.getElementById('admin-view').classList.remove('hidden-view');
+               document.getElementById('user-display').innerText = 'Admin';
+               renderAdminHistory(); renderMaterials();
+           }
+       }
 
-        // DÁN FIREBASE CONFIG CỦA BẠN VÀO ĐÂY
-        const firebaseConfig = {
-          apiKey: "AIzaSy...",
-          authDomain: "chauquocanh.firebaseapp.com",
-          projectId: "chauquocanh",
-          storageBucket: "chauquocanh.appspot.com",
-          messagingSenderId: "123456789",
-          appId: "1:123456789:web:abcde"
-        };
+       function logout() {
+           sessionLogs = []; document.getElementById('session-history-table').innerHTML = '';
+           ['nav-actions', 'employee-view', 'admin-view'].forEach(id => document.getElementById(id).classList.add('hidden-view'));
+           document.getElementById('login-view').classList.remove('hidden-view');
+           if(html5QrcodeScanner) html5QrcodeScanner.clear().catch(e=>e);
+       }
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+       function checkMachineField() {
+           const isM10 = document.getElementById('workshop-select').value === 'M10';
+           document.getElementById('machine-group').classList.toggle('hidden-view', !isM10);
+       }
 
-        let currentUser = { name: "", role: "" };
-        let materialsList = [];
-        let html5QrcodeScanner = null;
+       document.getElementById('material-code').addEventListener('input', (e) => lookupMaterial(e.target.value.trim()));
 
-        // Tự động điền ngày hiện tại
-        document.getElementById('auditDate').valueAsDate = new Date();
+       function lookupMaterial(code) {
+           const infoDiv = document.getElementById('material-info');
+           if(!code) return infoDiv.innerHTML = '';
+           const mats = JSON.parse(localStorage.getItem('inventory_materials') || '[]');
+           const found = mats.find(m => m.material.toLowerCase() === code.toLowerCase());
+           infoDiv.innerHTML = found ? `<span class="text-green-600">${found.name} | ${found.msp}</span>` 
+                                     : `<span class="text-orange-500">Mã chưa có trong Master Data</span>`;
+       }
 
-        // 1. ĐĂNG NHẬP
-        document.getElementById('loginBtn').onclick = () => {
-            const role = document.getElementById('loginRole').value;
-            if (role === 'admin') {
-                const u = document.getElementById('adminUser').value;
-                const p = document.getElementById('adminPass').value;
-                if (u === 'admin' && p === 'chauquocanh') {
-                    currentUser = { name: 'Admin', role: 'admin' };
-                } else {
-                    alert('Sai tên đăng nhập hoặc mật khẩu Admin!');
-                    return;
-                }
-            } else {
-                const gName = document.getElementById('guestName').value.trim();
-                if (!gName) {
-                    alert('Vui lòng nhập tên người kiểm kê!');
-                    return;
-                }
-                currentUser = { name: gName, role: 'guest' };
-            }
+       function startScanner() {
+           const readerDiv = document.getElementById('reader');
+           if(readerDiv.style.display === 'block' && html5QrcodeScanner) {
+               html5QrcodeScanner.clear().then(() => readerDiv.style.display = 'none');
+               return;
+           }
+           readerDiv.style.display = 'block';
+           if(!html5QrcodeScanner) html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 }, false);
+           
+           html5QrcodeScanner.render((decodedText) => {
+               document.getElementById('material-code').value = decodedText; lookupMaterial(decodedText);
+               html5QrcodeScanner.clear().then(() => {
+                   readerDiv.style.display = 'none';
+                   Swal.fire({icon: 'success', title: 'Quét thành công', timer: 1000, showConfirmButton: false});
+               });
+           });
+       }
 
-            document.getElementById('loginSection').classList.add('hidden');
-            document.getElementById('mainSection').classList.remove('hidden');
-            document.getElementById('userInfo').innerText = currentUser.name;
-            document.getElementById('userRole').innerText = currentUser.role === 'admin' ? 'Quản trị viên' : 'Khách';
+       function saveInventory() {
+           const inspector = document.getElementById('inspector-name').value.trim();
+           const workshop = document.getElementById('workshop-select').value;
+           const machine = workshop === 'M10' ? document.getElementById('machine-select').value : '';
+           const code = document.getElementById('material-code').value.trim();
+           const qty = parseFloat(document.getElementById('material-qty').value);
 
-            if (currentUser.role === 'admin') {
-                document.getElementById('adminPanel').classList.remove('hidden');
-            }
-            
-            loadMaterials();
-            loadHistory();
-        };
+           if(!inspector || !workshop || !code || isNaN(qty) || (workshop === 'M10' && !machine)) {
+               return Swal.fire('Lỗi', 'Vui lòng điền đủ thông tin bắt buộc.', 'warning');
+           }
 
-        // 2. ĐĂNG XUẤT
-        document.getElementById('logoutBtn').onclick = () => {
-            location.reload();
-        };
+           localStorage.setItem('last_inspector', inspector);
+           const mats = JSON.parse(localStorage.getItem('inventory_materials') || '[]');
+           const found = mats.find(m => m.material.toLowerCase() === code.toLowerCase());
+           
+           const record = { id: Date.now(), timestamp: new Date().toLocaleString('vi-VN'), inspector, workshop, machine, materialCode: code, materialName: found?.name || 'Ngoài danh mục', qty };
+           
+           const history = JSON.parse(localStorage.getItem('inventory_history') || '[]');
+           history.push(record); localStorage.setItem('inventory_history', JSON.stringify(history));
+           
+           sessionLogs.unshift(record);
+           document.getElementById('session-history-table').innerHTML = sessionLogs.map(r => `
+               <tr><td class="p-3">${r.materialCode}</td><td class="p-3 font-bold">${r.qty}</td><td class="p-3">${r.workshop} ${r.machine?'- '+r.machine:''}</td></tr>
+           `).join('');
 
-        // 3. ADMIN THÊM VẬT TƯ
-        document.getElementById('addMaterialBtn').onclick = async () => {
-            const group = document.getElementById('matGroup').value.trim();
-            const code = document.getElementById('matCode').value.trim();
-            const name = document.getElementById('matName').value.trim();
-            const qr = document.getElementById('matQR').value.trim();
+           document.getElementById('material-code').value = ''; document.getElementById('material-qty').value = '';
+           Swal.fire({icon: 'success', title: 'Đã lưu', timer: 1000, showConfirmButton: false});
+       }
 
-            if (!code || !name || !qr) {
-                alert('Vui lòng điền đủ Mã, Tên và Mã QR!');
-                return;
-            }
+       // --- ADMIN FUNCTIONS ---
+       function switchAdminTab(tab) {
+           const isLog = tab === 'logs';
+           document.getElementById('admin-logs-tab').classList.toggle('hidden-view', !isLog);
+           document.getElementById('admin-materials-tab').classList.toggle('hidden-view', isLog);
+       }
 
-            await addDoc(collection(db, "materials"), { group, code, name, qr });
-            alert('Thêm vật tư thành công!');
-            document.getElementById('matCode').value = '';
-            document.getElementById('matName').value = '';
-            document.getElementById('matQR').value = '';
-        };
+       function renderAdminHistory() {
+           const history = JSON.parse(localStorage.getItem('inventory_history') || '[]').reverse();
+           document.getElementById('admin-history-table').innerHTML = history.map(r => `
+               <tr>
+                   <td class="p-3 text-xs">${r.timestamp}</td><td class="p-3">${r.inspector}</td><td class="p-3">${r.workshop} ${r.machine||''}</td>
+                   <td class="p-3">${r.materialCode}</td><td class="p-3 truncate max-w-[200px]">${r.materialName}</td><td class="p-3 font-bold">${r.qty}</td>
+                   <td class="p-3 text-center"><button onclick="deleteRecord(${r.id})" class="text-red-500">Xóa</button></td>
+               </tr>
+           `).join('');
+       }
 
-        // TẢI DANH SÁCH VẬT TƯ
-        function loadMaterials() {
-            onSnapshot(collection(db, "materials"), (snapshot) => {
-                const select = document.getElementById('selectMaterial');
-                select.innerHTML = '<option value="">-- Chọn Material / Vật tư --</option>';
-                materialsList = [];
-                
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    materialsList.push(data);
-                    select.innerHTML += `<option value="${data.qr}">[${data.group || 'Khác'}] ${data.code} - ${data.name}</option>`;
-                });
-            });
-        }
+       function deleteRecord(id) {
+           let h = JSON.parse(localStorage.getItem('inventory_history') || '[]');
+           localStorage.setItem('inventory_history', JSON.stringify(h.filter(r => r.id !== id)));
+           renderAdminHistory();
+       }
 
-        // 4. QUÉT MÃ QR
-        document.getElementById('startScannerBtn').onclick = () => {
-            html5QrcodeScanner = new Html5Qrcode("reader");
-            html5QrcodeScanner.start(
-                { facingMode: "environment" }, 
-                { fps: 10, qrbox: 250 },
-                (decodedText) => {
-                    const mat = materialsList.find(m => m.qr === decodedText);
-                    if (mat) {
-                        document.getElementById('selectMaterial').value = mat.qr;
-                        alert(`Đã tìm thấy: ${mat.name}`);
-                    } else {
-                        alert(`Mã QR "${decodedText}" chưa có trong danh mục!`);
-                    }
-                    html5QrcodeScanner.stop();
-                },
-                (errorMessage) => {}
-            );
-        };
+       function clearHistory() { localStorage.setItem('inventory_history', '[]'); renderAdminHistory(); }
+       
+       function renderMaterials() {
+           const mats = JSON.parse(localStorage.getItem('inventory_materials') || '[]');
+           document.getElementById('materials-table').innerHTML = mats.map(m => `
+               <tr><td class="p-3 font-bold">${m.material}</td><td class="p-3">${m.name}</td><td class="p-3 text-xs">${m.msp}</td>
+               <td class="p-3"><button onclick="deleteMaterial('${m.material}')" class="text-red-500">X</button></td></tr>
+           `).join('');
+       }
+       function deleteMaterial(code) {
+           let m = JSON.parse(localStorage.getItem('inventory_materials') || '[]');
+           localStorage.setItem('inventory_materials', JSON.stringify(m.filter(x => x.material !== code)));
+           renderMaterials();
+       }
+       function clearMaterials() { localStorage.setItem('inventory_materials', '[]'); renderMaterials(); }
 
-        // 5. LƯU KẾT QUẢ KIỂM KÊ
-        document.getElementById('submitAuditBtn').onclick = async () => {
-            const date = document.getElementById('auditDate').value;
-            const qrVal = document.getElementById('selectMaterial').value;
-            const qty = document.getElementById('auditQty').value;
+       function exportHistoryExcel() {
+           const history = JSON.parse(localStorage.getItem('inventory_history') || '[]');
+           const data = history.map(r => ({"Thời Gian": r.timestamp, "Người KK": r.inspector, "Công Đoạn": r.workshop, "Mã Máy": r.machine, "Material": r.materialCode, "Diễn Giải": r.materialName, "SL": r.qty}));
+           const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "KiemKe");
+           XLSX.writeFile(wb, `BaoCao_KiemKe.xlsx`);
+       }
 
-            if (!date || !currentUser.name) {
-                alert('Bắt buộc phải có Tên người kiểm kê và Ngày!');
-                return;
-            }
-            if (!qrVal || !qty) {
-                alert('Vui lòng chọn vật tư và nhập số lượng!');
-                return;
-            }
-
-            const mat = materialsList.find(m => m.qr === qrVal);
-
-            await addDoc(collection(db, "audit_history"), {
-                date: date,
-                inspector: currentUser.name,
-                materialGroup: mat ? mat.group : "",
-                materialCode: mat ? mat.code : "",
-                materialName: mat ? mat.name : "",
-                qty: Number(qty),
-                timestamp: new Date()
-            });
-
-            alert('Đã lưu dữ liệu kiểm kê!');
-            document.getElementById('auditQty').value = '';
-        };
-
-        // TẢI LỊCH SỬ KIỂM KÊ
-        function loadHistory() {
-            const q = query(collection(db, "audit_history"), orderBy("timestamp", "desc"));
-            onSnapshot(q, (snapshot) => {
-                const tbody = document.getElementById('historyTable');
-                tbody.innerHTML = '';
-                snapshot.forEach((doc) => {
-                    const data = doc.data();
-                    tbody.innerHTML += `
-                        <tr>
-                            <td>${data.date}</td>
-                            <td>${data.inspector}</td>
-                            <td>${data.materialName} (${data.materialCode})</td>
-                            <td><b>${data.qty}</b></td>
-                        </tr>
-                    `;
-                });
-            });
-        }
-
-        // 6. XUẤT FILE EXCEL
-        document.getElementById('exportExcelBtn').onclick = () => {
-            const table = document.getElementById("historyTable");
-            const rows = table.getElementsByTagName("tr");
-            
-            if (rows.length === 0) {
-                alert("Chưa có dữ liệu lịch sử để xuất file!");
-                return;
-            }
-
-            const data = [];
-            for (let row of rows) {
-                const cols = row.querySelectorAll("td");
-                data.push({
-                    "Ngày kiểm kê": cols[0].innerText,
-                    "Người kiểm kê": cols[1].innerText,
-                    "Vật tư / Mã": cols[2].innerText,
-                    "Số lượng": Number(cols[3].innerText)
-                });
-            }
-
-            const worksheet = XLSX.utils.json_to_sheet(data);
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, "Lich_Su_Kiem_Ke");
-            XLSX.writeFile(workbook, `KiemKe_${new Date().toISOString().split('T')[0]}.xlsx`);
-        };
-    </script>
+       function uploadExcel() {
+           const file = document.getElementById('excel-upload').files[0];
+           if(!file) return Swal.fire('Lỗi', 'Vui lòng chọn file', 'error');
+           const reader = new FileReader();
+           reader.onload = (e) => {
+               const wb = XLSX.read(new Uint8Array(e.target.result), {type: 'array'});
+               const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, defval: ""});
+               
+               let newMats = [], headerIdx = -1, colName = -1, colMat = -1, colMSP = -1;
+               for(let i=0; i<Math.min(rows.length, 20); i++) {
+                   if(rows[i].some(c => String(c).toLowerCase().includes('material'))) {
+                       headerIdx = i;
+                       rows[i].forEach((c, j) => {
+                           let v = String(c).toLowerCase();
+                           if(v.includes('diễn giải') || v.includes('dien giai')) colName = j;
+                           if(v.includes('material')) colMat = j;
+                           if(v.includes('msp')) colMSP = j;
+                       });
+                       break;
+                   }
+               }
+               
+               if(headerIdx === -1 || colMat === -1) return Swal.fire('Lỗi', 'Không tìm thấy cột Material', 'error');
+               
+               for(let i = headerIdx + 1; i < rows.length; i++) {
+                   if(rows[i][colMat]) newMats.push({
+                       material: String(rows[i][colMat]).trim(),
+                       name: colName !== -1 ? String(rows[i][colName]).trim() : '',
+                       msp: colMSP !== -1 ? String(rows[i][colMSP]).trim() : ''
+                   });
+               }
+               
+               let current = JSON.parse(localStorage.getItem('inventory_materials') || '[]');
+               let matMap = new Map();
+               current.forEach(m => matMap.set(m.material.toLowerCase(), m));
+               newMats.forEach(m => matMap.set(m.material.toLowerCase(), m));
+               
+               localStorage.setItem('inventory_materials', JSON.stringify(Array.from(matMap.values())));
+               renderMaterials(); Swal.fire('Thành công', `Đã cập nhật ${newMats.length} mã`, 'success');
+           };
+           reader.readAsArrayBuffer(file);
+       }
+   </script>
 </body>
 </html>

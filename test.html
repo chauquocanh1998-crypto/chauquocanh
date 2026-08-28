@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Kiểm Kê Nội Bộ</title>
+    <!-- Thư viện Quét mã QR và Xuất Excel -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 15px; max-width: 650px; margin: auto; background: #f4f6f9; }
+        .card { background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
+        input, select, button { padding: 10px; margin: 5px 0; width: 100%; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { font-weight: bold; cursor: pointer; background: #007bff; color: white; border: none; }
+        .btn-success { background: #28a745; }
+        .btn-warning { background: #ffc107; color: #000; }
+        .btn-danger { background: #dc3545; }
+        .hidden { display: none; }
+        #reader { width: 100%; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <!-- MÀN HÌNH ĐĂNG NHẬP -->
+    <div id="loginSection" class="card">
+        <h2>Đăng Nhập Hệ Thống</h2>
+        <select id="loginRole" onchange="toggleLoginInputs()">
+            <option value="guest">Khách (Nhân viên kiểm kê)</option>
+            <option value="admin">Quản trị viên (Admin)</option>
+        </select>
+
+        <div id="guestInputs">
+            <input type="text" id="guestName" placeholder="Nhập tên người kiểm kê...">
+        </div>
+
+        <div id="adminInputs" class="hidden">
+            <input type="text" id="adminUser" placeholder="Tên đăng nhập admin">
+            <input type="password" id="adminPass" placeholder="Mật khẩu">
+        </div>
+
+        <button id="loginBtn">Vào Hệ Thống</button>
+    </div>
+
+    <!-- MÀN HÌNH CHÍNH (SAU KHỦNG ĐĂNG NHẬP) -->
+    <div id="mainSection" class="hidden">
+        <div class="card" style="display: flex; justify-content: space-between; align-items: center;">
+            <div>Xin chào: <strong id="userInfo"></strong> (<span id="userRole"></span>)</div>
+            <button id="logoutBtn" style="width: auto; padding: 5px 10px;" class="btn-danger">Đăng xuất</button>
+        </div>
+
+        <!-- PHẦN DÀNH CHO ADMIN: QUẢN LÝ DANH MỤC MÃ VẬT TƯ -->
+        <div id="adminPanel" class="card hidden">
+            <h3>Quản Lý Danh Mục Vật Tư (Admin)</h3>
+            <input type="text" id="matGroup" placeholder="Nhóm Material (VD: Vải, Linh kiện)">
+            <input type="text" id="matCode" placeholder="Mã vật tư (VD: VT-001)">
+            <input type="text" id="matName" placeholder="Tên vật tư">
+            <input type="text" id="matQR" placeholder="Mã QR / Code (Dùng để quét)">
+            <button id="addMaterialBtn" class="btn-warning">Thêm Vào Danh Mục</button>
+        </div>
+
+        <!-- PHẦN KIỂM KÊ (DÀNH CHO CẢ KHÁCH VÀ ADMIN) -->
+        <div class="card">
+            <h3>Thực Hiện Kiểm Kê</h3>
+            <input type="date" id="auditDate">
+            
+            <button id="startScannerBtn" class="btn-warning">Quét Mã QR qua Camera</button>
+            <div id="reader"></div>
+
+            <select id="selectMaterial">
+                <option value="">-- Chọn Material / Vật tư --</option>
+            </select>
+            
+            <input type="number" id="auditQty" placeholder="Nhập số lượng kiểm kê">
+            <button id="submitAuditBtn" class="btn-success">Lưu Kết Quả Kiểm Kê</button>
+        </div>
+
+        <!-- LỊCH SỬ VÀ XUẤT EXCEL -->
+        <div class="card">
+            <h3>Lịch Sử Kiểm Kê Nội Bộ</h3>
+            <button id="exportExcelBtn" class="btn-success">Xuất File Kiểm Kê (.xlsx)</button>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ngày</th>
+                        <th>Người KK</th>
+                        <th>Vật Tư</th>
+                        <th>SL</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- SCRIPT CHUYỂN ĐỔI FORM ĐĂNG NHẬP -->
+    <script>
+        function toggleLoginInputs() {
+            const role = document.getElementById('loginRole').value;
+            if(role === 'admin') {
+                document.getElementById('guestInputs').classList.add('hidden');
+                document.getElementById('adminInputs').classList.remove('hidden');
+            } else {
+                document.getElementById('guestInputs').classList.remove('hidden');
+                document.getElementById('adminInputs').classList.add('hidden');
+            }
+        }
+    </script>
+
+    <!-- LOGIC FIREBASE VÀ XỬ LÝ CHÍNH -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // DÁN FIREBASE CONFIG CỦA BẠN VÀO ĐÂY
+        const firebaseConfig = {
+          apiKey: "AIzaSy...",
+          authDomain: "chauquocanh.firebaseapp.com",
+          projectId: "chauquocanh",
+          storageBucket: "chauquocanh.appspot.com",
+          messagingSenderId: "123456789",
+          appId: "1:123456789:web:abcde"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        let currentUser = { name: "", role: "" };
+        let materialsList = [];
+        let html5QrcodeScanner = null;
+
+        // Tự động điền ngày hiện tại
+        document.getElementById('auditDate').valueAsDate = new Date();
+
+        // 1. ĐĂNG NHẬP
+        document.getElementById('loginBtn').onclick = () => {
+            const role = document.getElementById('loginRole').value;
+            if (role === 'admin') {
+                const u = document.getElementById('adminUser').value;
+                const p = document.getElementById('adminPass').value;
+                if (u === 'admin' && p === 'chauquocanh') {
+                    currentUser = { name: 'Admin', role: 'admin' };
+                } else {
+                    alert('Sai tên đăng nhập hoặc mật khẩu Admin!');
+                    return;
+                }
+            } else {
+                const gName = document.getElementById('guestName').value.trim();
+                if (!gName) {
+                    alert('Vui lòng nhập tên người kiểm kê!');
+                    return;
+                }
+                currentUser = { name: gName, role: 'guest' };
+            }
+
+            document.getElementById('loginSection').classList.add('hidden');
+            document.getElementById('mainSection').classList.remove('hidden');
+            document.getElementById('userInfo').innerText = currentUser.name;
+            document.getElementById('userRole').innerText = currentUser.role === 'admin' ? 'Quản trị viên' : 'Khách';
+
+            if (currentUser.role === 'admin') {
+                document.getElementById('adminPanel').classList.remove('hidden');
+            }
+            
+            loadMaterials();
+            loadHistory();
+        };
+
+        // 2. ĐĂNG XUẤT
+        document.getElementById('logoutBtn').onclick = () => {
+            location.reload();
+        };
+
+        // 3. ADMIN THÊM VẬT TƯ
+        document.getElementById('addMaterialBtn').onclick = async () => {
+            const group = document.getElementById('matGroup').value.trim();
+            const code = document.getElementById('matCode').value.trim();
+            const name = document.getElementById('matName').value.trim();
+            const qr = document.getElementById('matQR').value.trim();
+
+            if (!code || !name || !qr) {
+                alert('Vui lòng điền đủ Mã, Tên và Mã QR!');
+                return;
+            }
+
+            await addDoc(collection(db, "materials"), { group, code, name, qr });
+            alert('Thêm vật tư thành công!');
+            document.getElementById('matCode').value = '';
+            document.getElementById('matName').value = '';
+            document.getElementById('matQR').value = '';
+        };
+
+        // TẢI DANH SÁCH VẬT TƯ
+        function loadMaterials() {
+            onSnapshot(collection(db, "materials"), (snapshot) => {
+                const select = document.getElementById('selectMaterial');
+                select.innerHTML = '<option value="">-- Chọn Material / Vật tư --</option>';
+                materialsList = [];
+                
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    materialsList.push(data);
+                    select.innerHTML += `<option value="${data.qr}">[${data.group || 'Khác'}] ${data.code} - ${data.name}</option>`;
+                });
+            });
+        }
+
+        // 4. QUÉT MÃ QR
+        document.getElementById('startScannerBtn').onclick = () => {
+            html5QrcodeScanner = new Html5Qrcode("reader");
+            html5QrcodeScanner.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: 250 },
+                (decodedText) => {
+                    const mat = materialsList.find(m => m.qr === decodedText);
+                    if (mat) {
+                        document.getElementById('selectMaterial').value = mat.qr;
+                        alert(`Đã tìm thấy: ${mat.name}`);
+                    } else {
+                        alert(`Mã QR "${decodedText}" chưa có trong danh mục!`);
+                    }
+                    html5QrcodeScanner.stop();
+                },
+                (errorMessage) => {}
+            );
+        };
+
+        // 5. LƯU KẾT QUẢ KIỂM KÊ
+        document.getElementById('submitAuditBtn').onclick = async () => {
+            const date = document.getElementById('auditDate').value;
+            const qrVal = document.getElementById('selectMaterial').value;
+            const qty = document.getElementById('auditQty').value;
+
+            if (!date || !currentUser.name) {
+                alert('Bắt buộc phải có Tên người kiểm kê và Ngày!');
+                return;
+            }
+            if (!qrVal || !qty) {
+                alert('Vui lòng chọn vật tư và nhập số lượng!');
+                return;
+            }
+
+            const mat = materialsList.find(m => m.qr === qrVal);
+
+            await addDoc(collection(db, "audit_history"), {
+                date: date,
+                inspector: currentUser.name,
+                materialGroup: mat ? mat.group : "",
+                materialCode: mat ? mat.code : "",
+                materialName: mat ? mat.name : "",
+                qty: Number(qty),
+                timestamp: new Date()
+            });
+
+            alert('Đã lưu dữ liệu kiểm kê!');
+            document.getElementById('auditQty').value = '';
+        };
+
+        // TẢI LỊCH SỬ KIỂM KÊ
+        function loadHistory() {
+            const q = query(collection(db, "audit_history"), orderBy("timestamp", "desc"));
+            onSnapshot(q, (snapshot) => {
+                const tbody = document.getElementById('historyTable');
+                tbody.innerHTML = '';
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${data.date}</td>
+                            <td>${data.inspector}</td>
+                            <td>${data.materialName} (${data.materialCode})</td>
+                            <td><b>${data.qty}</b></td>
+                        </tr>
+                    `;
+                });
+            });
+        }
+
+        // 6. XUẤT FILE EXCEL
+        document.getElementById('exportExcelBtn').onclick = () => {
+            const table = document.getElementById("historyTable");
+            const rows = table.getElementsByTagName("tr");
+            
+            if (rows.length === 0) {
+                alert("Chưa có dữ liệu lịch sử để xuất file!");
+                return;
+            }
+
+            const data = [];
+            for (let row of rows) {
+                const cols = row.querySelectorAll("td");
+                data.push({
+                    "Ngày kiểm kê": cols[0].innerText,
+                    "Người kiểm kê": cols[1].innerText,
+                    "Vật tư / Mã": cols[2].innerText,
+                    "Số lượng": Number(cols[3].innerText)
+                });
+            }
+
+            const worksheet = XLSX.utils.json_to_sheet(data);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Lich_Su_Kiem_Ke");
+            XLSX.writeFile(workbook, `KiemKe_${new Date().toISOString().split('T')[0]}.xlsx`);
+        };
+    </script>
+</body>
+</html>
